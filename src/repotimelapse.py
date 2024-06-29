@@ -10,6 +10,7 @@ class RepositoryTimelapse:
         self.analyzer = CommitAnalyzer()
         self.df_creator = DataFrameCreator()
         self.video_generator = VideoGenerator()
+        self.output_dir = "out"
 
     def clone_repository(self, remote_url, branch='master'):
         self.repo.clone(remote_url, branch)
@@ -19,8 +20,9 @@ class RepositoryTimelapse:
         commit_data = self.analyzer.analyze_commits(self.repo, commits, directory)
         df = self.df_creator.create_dataframe(self.repo, directory, commit_data)
         df = self.df_creator.process_dataframe(df)
-        
-        output_path = f"line_count_race_{os.path.basename(directory)}.mp4"
+    
+        base_name = os.path.basename(directory).replace('/', '_')
+        output_path = os.path.join(self.output_dir, f"line_count_race_{base_name}.mp4")
         self.video_generator.generate_video(df, output_path, f'{directory} ディレクトリのコード行数推移')
         print(f"{directory} の動画が {output_path} に生成されました。")
 
