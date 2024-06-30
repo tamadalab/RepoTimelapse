@@ -6,9 +6,14 @@ __author__ = 'Hayami Kento'
 __version__ = '0.1.0'
 __date__ = '2024/05/31 (created: 2024/05/31)'
 
-import sys
+from src.repotimelapse import RepositoryTimelapse
 
-from repotimelapse import RepoTimelapse
-
-if __name__ == '__main__':
-    pass
+if __name__ == "__main__":
+    repo_path = "gradle"
+    remote_url = "https://github.com/gradle/gradle.git"
+    directories = [
+        'build-logic/binary-compatibility/src/main/groovy/gradlebuild/binarycompatibility',
+    ]
+    
+    processor = RepositoryTimelapse(repo_path)
+    processor.run(remote_url, directories) 
