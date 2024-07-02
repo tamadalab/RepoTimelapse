@@ -8,7 +8,7 @@ class DataFrameCreator:
         current_files = {}
 
         for commit in reversed(commit_data):
-            commit_date = commit["date"].strftime('%Y-%m-%d-%H-%M-%S')
+            commit_date = commit["date"].strftime('%Y-%m-%d %H:%M:%S')
             commit_hexsha = commit["commit_hexsha"]
             
             for file_path in list(current_files.keys()):
@@ -28,3 +28,21 @@ class DataFrameCreator:
     def process_dataframe(df):
         df.columns = [os.path.basename(col) for col in df.columns]
         return df
+    
+    @staticmethod
+    def aggregate_dataframe(df, period='D'):
+        """
+        データフレームを指定した期間で集計します。
+        
+        :param df: 元のデータフレーム
+        :param period: 集計期間 ('D' for daily, 'W' for weekly)
+        :return: 集計されたデータフレーム
+        """
+        df.index = pd.to_datetime(df.index)
+        
+        if period == 'D':
+            return df.resample('D').last().ffill()
+        elif period == 'W':
+            return df.resample('W').last().ffill()
+        else:
+            raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
