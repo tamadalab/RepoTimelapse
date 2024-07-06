@@ -1,10 +1,22 @@
 import git
 import os
+import re
 
 class GitRepository:
-    def __init__(self, repo_path):
-        self.repo_path = repo_path
+    def __init__(self, repo_url):
+        self.repo_url = repo_url
+        self.repo_path = self.get_repo_path(repo_url)
         self.repo = None
+
+    def get_repo_path(self, url):
+        pattern = r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)(?:\.git)?"
+        match = re.search(pattern, url)
+        if match:
+            owner = match.group("owner")
+            repo = match.group("repo")
+            return os.path.join(os.getcwd(), owner, repo)
+        else:
+            raise ValueError("Invalid GitHub URL")
 
     def clone(self, remote_url, branch='master'):
         if not os.path.exists(self.repo_path):
