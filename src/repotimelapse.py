@@ -1,9 +1,9 @@
 import os
+import pandas as pd
 from .git_repository import GitRepository
 from .commit_analyzer import CommitAnalyzer
 from .dataframe_creator import DataFrameCreator
 from .video_generator import VideoGenerator
-
 
 class RepositoryTimelapse:
     def __init__(self, repo_url, output_dir="out", aggregation_period="D"):
@@ -15,14 +15,14 @@ class RepositoryTimelapse:
         self.aggregation_period = aggregation_period
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def clone_repository(self, repo_url, branch="master"):
-        self.repo.clone(repo_url, branch)
+    def clone_repository(self, repo_url):
+        self.repo.clone(repo_url)
 
     def process_directory(self, directory):
         commits = self.repo.get_commit_history(directory)
         commit_data = self.analyzer.analyze_commits(self.repo, commits, directory)
         df = self.df_creator.create_dataframe(self.repo, directory, commit_data)
-        df = self.df_creator.process_dataframe(df)
+        # df = self.df_creator.process_dataframe(df)
         
         # 新しい集計ステップ
         df = self.df_creator.aggregate_dataframe(df, self.aggregation_period)
@@ -36,8 +36,46 @@ class RepositoryTimelapse:
         self.video_generator.generate_plotly_animation(df, 'out/binarycompatibility.html', f'{directory} ディレクトリのコード行数推移 ({period_name})')
         print(f"{directory} の{period_name}動画が {output_path} に生成されました。")
 
-    def run(self, repo_url, directories, branch="master"):
-        self.clone_repository(repo_url, branch)
+    def generate_commit_history_csv(self, file_extensions=None, batch_size=100, start_commit=None):
+        csv_filename = os.path.join(self.output_dir, "commit_history.csv")
+        self.repo.process_commits(csv_filename, file_extensions, batch_size, start_commit)
+        print(f"Commit history CSV has been generated: {csv_filename}")
+        return csv_filename
+
+    def generate_treemap(self, csv_filename):
+        df = pd.read_csv(csv_filename)
+        output_path = os.path.join(self.output_dir, "file_structure_treemap.html")
+        
+        # データの前処理
+        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
+        df_latest = df.sort_values('date').groupby('File').last().reset_index()
+        
+        # ファイルパスの処理
+        df_latest['path'] = df_latest['File'].apply(lambda x: x.split('/'))
+        df_latest['depth'] = df_latest['path'].apply(len)
+        max_depth = df_latest['depth'].max()
+        
+        # パスの列を作成
+        for i in range(max_depth):
+            df_latest[f'path_{i}'] = df_latest['path'].apply(lambda x: x[i] if i < len(x) else '')
+        
+        # 空のパスを削除
+        path_columns = [f'path_{i}' for i in range(max_depth) if not df_latest[f'path_{i}'].eq('').all()]
+        
+        self.video_generator.generate_treemap(df_latest, output_path, 'File Structure Treemap', path_columns)
+        print(f"Treemap has been generated: {output_path}")
+
+    def run_extended_analysis(self, repo_url, file_extensions=None):
+        self.clone_repository(repo_url)
+        csv_filename = self.generate_commit_history_csv(file_extensions)
+        self.generate_treemap(csv_filename)
+        # 元の分析を実行する場合はここでコメントを外してください
+        # self.process_directory(directory)
+    
+    def run(self, repo_url):
+        self.clone_repository(repo_url)
+        directories = self.repo.get_directories()
         for directory in directories:
             print(f"Processing {directory}...")
-            self.process_directory(directory)
+            self.create_csv(directory)
+            # self.process_directory(directory)

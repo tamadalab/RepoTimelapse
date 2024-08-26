@@ -4,6 +4,7 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from tqdm import tqdm
 import plotly.io as pio
+import plotly.express as px
 
 class VideoGenerator:
     @staticmethod
@@ -82,3 +83,26 @@ class VideoGenerator:
         """
         VideoGenerator.generate_video(df, bar_chart_race_output, title)
         VideoGenerator.generate_plotly_animation(df, plotly_output, title)
+
+    @staticmethod
+    def generate_treemap(df, output_path, title, path_columns):
+        """
+        Generates a treemap visualization using Plotly and saves it as an HTML file.
+
+        :param df: DataFrame containing the data
+        :param output_path: Path to save the HTML file
+        :param title: Title of the treemap
+        :param path_columns: List of column names to use for the treemap hierarchy
+        """
+        fig = px.treemap(
+            df,
+            path=path_columns,
+            values='Lines',
+            color='date',
+            hover_data=['date', 'Lines'],
+            title=title
+        )
+
+        # Save the figure as an HTML file
+        pio.write_html(fig, file=output_path)
+        print(f"Treemap has been saved to {output_path}")

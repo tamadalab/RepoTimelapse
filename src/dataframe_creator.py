@@ -18,10 +18,15 @@ class DataFrameCreator:
                 files_to_update = set(current_files.keys()) | changed_files
                 
                 updated_files = {}
+                commit_tree = repo.commit(commit_hexsha).tree
                 for file_path in files_to_update:
-                    line_count = repo.count_lines_in_file(commit_hexsha, file_path)
-                    if line_count > 0:
-                        updated_files[file_path] = line_count
+                    try:
+                        file_blob = commit_tree[file_path[len(directory_path):]]
+                        line_count = file_blob.data_stream.read().decode('utf-8').count('\n')
+                        if line_count > 0:
+                            updated_files[file_path] = line_count
+                    except KeyError:
+                        pass
 
                 return commit_date, updated_files
             except Exception as e:
@@ -38,14 +43,14 @@ class DataFrameCreator:
                     data[commit_date] = current_files.copy()
  
         return pd.DataFrame(data).T.fillna(0)
-
+    
     @staticmethod
     def process_dataframe(df):
         df.columns = [os.path.basename(col) for col in df.columns]
         return df
     
     @staticmethod
-    def aggregate_dataframe(df, period='D'):
+    def aggregate_dataframe(df, period='W'):
         """
         データフレームを指定した期間で集計します。
         

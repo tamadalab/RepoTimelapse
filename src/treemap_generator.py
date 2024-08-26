@@ -14,3 +14,4 @@ class TreeMapGenerator:
             title=title
         )
         fig.write_html(output_path)
+        fig.show()
