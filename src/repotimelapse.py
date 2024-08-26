@@ -51,16 +51,14 @@ class RepositoryTimelapse:
         df_latest = df.sort_values('date').groupby('File').last().reset_index()
         
         # ファイルパスの処理
-        df_latest['path'] = df_latest['File'].apply(lambda x: x.split('/'))
-        df_latest['depth'] = df_latest['path'].apply(len)
-        max_depth = df_latest['depth'].max()
+        path_parts = df_latest['File'].str.split('/', expand=True)
+        for i in range(len(path_parts.columns)):
+            df_latest[f'path_{i}'] = path_parts[i]
+             
+        df_latest['size'] = df_latest['Lines']
         
-        # パスの列を作成
-        for i in range(max_depth):
-            df_latest[f'path_{i}'] = df_latest['path'].apply(lambda x: x[i] if i < len(x) else '')
-        
-        # 空のパスを削除
-        path_columns = [f'path_{i}' for i in range(max_depth) if not df_latest[f'path_{i}'].eq('').all()]
+        # 動的にパスカラムのリストを作成
+        path_columns = [f'path_{i}' for i in range(len(path_parts.columns))]
         
         self.video_generator.generate_treemap(df_latest, output_path, 'File Structure Treemap', path_columns)
         print(f"Treemap has been generated: {output_path}")
