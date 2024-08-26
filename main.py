@@ -10,11 +10,11 @@ from src.repotimelapse import RepositoryTimelapse
 
 def main():
     repo_url = "https://github.com/tamadalab/MarryLab"
-    repo_path = "MarryLab"
+    # repo_url = "https://github.com/SonarSource/sonarqube.git"
     file_extensions = ['.gradle', '.java', '.kt', '.xml']  # 分析対象のファイル拡張子
 
     processor = RepositoryTimelapse(repo_url)
-    processor.run_extended_analysis(repo_path, file_extensions)
+    processor.run_extended_analysis(repo_url, file_extensions)
 
 if __name__ == "__main__":
     main()

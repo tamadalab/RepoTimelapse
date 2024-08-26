@@ -12,18 +12,25 @@ from functools import partial
 class GitRepository:
     def __init__(self, repo_url):
         self.repo_url = repo_url
-        self.repo_path = self.get_repo_path(repo_url)
+        self.repo_info = self.parse_repo_url(repo_url)
+        self.repo_path = self.get_repo_path()
+        self.output_dir = self.generate_output_dir()
         self.repo = None
+        self.clone(repo_url)
 
-    def get_repo_path(self, url):
+    def parse_repo_url(self, url):
         pattern = r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)(?:\.git)?"
         match = re.search(pattern, url)
         if match:
-            owner = match.group("owner")
-            repo = match.group("repo")
-            return os.path.join(os.getcwd(), owner, repo)
+            return {
+                'owner': match.group("owner"),
+                'repo': match.group("repo").rstrip('.git')
+            }
         else:
             raise ValueError("Invalid GitHub URL")
+        
+    def get_repo_path(self):
+        return os.path.join(os.getcwd(), self.repo_info['owner'], self.repo_info['repo'])
 
     def clone(self, remote_url):
 
@@ -42,6 +49,11 @@ class GitRepository:
             self.repo = git.Repo(self.repo_path)
         default_branch = self.repo.head.reference
         return list(self.repo.iter_commits(default_branch, paths=directory_path))
+    
+    def generate_output_dir(self):
+        output_dir = os.path.join("out", self.repo_info['owner'], self.repo_info['repo'])
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     def count_lines_in_file(self, commit_hexsha, file_path):
         if not self.repo:
@@ -141,3 +153,11 @@ class GitRepository:
                 writer.writeheader()
             for row in results:
                 writer.writerow(row)
+
+    @property
+    def owner(self):
+        return self.repo_info['owner']
+
+    @property
+    def repo_name(self):
+        return self.repo_info['repo']
