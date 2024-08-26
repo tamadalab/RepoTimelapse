@@ -8,12 +8,13 @@ __date__ = '2024/05/31 (created: 2024/05/31)'
 
 from src.repotimelapse import RepositoryTimelapse
 
+def main():
+    repo_url = "https://github.com/tamadalab/MarryLab"
+    repo_path = "MarryLab"
+    file_extensions = ['.gradle', '.java', '.kt', '.xml']  # 分析対象のファイル拡張子
+
+    processor = RepositoryTimelapse(repo_url)
+    processor.run_extended_analysis(repo_path, file_extensions)
+
 if __name__ == "__main__":
-    repo_path = "gradle"
-    remote_url = "https://github.com/gradle/gradle.git"
-    directories = [
-        'build-logic/binary-compatibility/src/main/groovy/gradlebuild/binarycompatibility',
-    ]
-    
-    processor = RepositoryTimelapse(repo_path)
-    processor.run(remote_url, directories) 
+    main()
