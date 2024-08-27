@@ -105,5 +105,4 @@ class VideoGenerator:
 
         # Save the figure as an HTML file
         pio.write_html(fig, file=output_path)
-        fig.show()
         print(f"Treemap has been saved to {output_path}")

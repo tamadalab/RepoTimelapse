@@ -1,9 +1,11 @@
 import os
 import pandas as pd
+import webbrowser
 from .git_repository import GitRepository
 from .commit_analyzer import CommitAnalyzer
 from .dataframe_creator import DataFrameCreator
 from .video_generator import VideoGenerator
+
 
 class RepositoryTimelapse:
     def __init__(self, repo_url, aggregation_period="D"):
@@ -60,6 +62,7 @@ class RepositoryTimelapse:
         
         self.video_generator.generate_treemap(df_latest, output_path, 'File Structure Treemap', path_columns)
         print(f"Treemap has been generated: {output_path}")
+        webbrowser.open('file://' + os.path.realpath(output_path))
 
     def run_extended_analysis(self, repo_url, file_extensions=None):
         # self.clone_repository(repo_url)
