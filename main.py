@@ -8,12 +8,15 @@ __date__ = '2024/05/31 (created: 2024/05/31)'
 
 from src.repotimelapse import RepositoryTimelapse
 
+def main():
+    # repo_url = "https://github.com/tamadalab/MarryLab"
+    # repo_url = "https://github.com/SonarSource/sonarqube.git"
+    # repo_url = "https://github.com/stleary/JSON-java.git"
+    repo_url = input("Enter the URL of the repository you want to analyze: ")
+    file_extensions = ['.gradle', '.java', '.kt', '.xml']  # 分析対象のファイル拡張子
+
+    processor = RepositoryTimelapse(repo_url)
+    processor.run_extended_analysis(repo_url, file_extensions)
+
 if __name__ == "__main__":
-    repo_path = "gradle"
-    remote_url = "https://github.com/gradle/gradle.git"
-    directories = [
-        'build-logic/binary-compatibility/src/main/groovy/gradlebuild/binarycompatibility',
-    ]
-    
-    processor = RepositoryTimelapse(repo_path)
-    processor.run(remote_url, directories) 
+    main()

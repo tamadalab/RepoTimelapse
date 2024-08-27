@@ -1,3 +1,5 @@
+import git
+
 class CommitAnalyzer:
     @staticmethod
     def analyze_commits(repo, commits, directory_path):
@@ -26,3 +28,4 @@ class CommitAnalyzer:
                 }
                 files.append(file_info)
         return files
+    
