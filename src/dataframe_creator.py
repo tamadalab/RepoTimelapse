@@ -45,6 +45,29 @@ class DataFrameCreator:
         return pd.DataFrame(data).T.fillna(0)
     
     @staticmethod
+    def treemap_dateframe(csv_filename):
+        df = pd.read_csv(csv_filename)
+        
+        # データの前処理
+        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
+        df_latest = df.sort_values('date').groupby('File').last().reset_index()
+        file_counts = df['File'].value_counts()
+        df_latest['changed_files'] = df_latest['File'].map(file_counts)
+        
+
+        # ファイルパスの処理
+        path_parts = df_latest['File'].str.split('/', expand=True)
+        for i in range(len(path_parts.columns)):
+            df_latest[f'path_{i}'] = path_parts[i]
+             
+        df_latest['size'] = df_latest['Lines']
+        
+        # 動的にパスカラムのリストを作成
+        path_columns = [f'path_{i}' for i in range(len(path_parts.columns))]
+
+        return df_latest, path_columns
+    
+    @staticmethod
     def process_dataframe(df):
         df.columns = [os.path.basename(col) for col in df.columns]
         return df

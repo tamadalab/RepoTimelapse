@@ -16,6 +16,8 @@ class GitRepository:
         self.repo_path = self.get_repo_path()
         self.output_dir = self.generate_output_dir()
         self.repo = None
+        self.repo_name = self.repo_info['repo']
+        self.owner = self.repo_info['owner']
         self.clone(repo_url)
 
     def parse_repo_url(self, url):
@@ -81,6 +83,9 @@ class GitRepository:
                     queue.append((item, full_path + '/'))
     
         return directories
+    
+    def get_repo_name(self):
+        return self.repo_name
     
     def count_lines(self, blob):
         try:
@@ -153,11 +158,3 @@ class GitRepository:
                 writer.writeheader()
             for row in results:
                 writer.writerow(row)
-
-    @property
-    def owner(self):
-        return self.repo_info['owner']
-
-    @property
-    def repo_name(self):
-        return self.repo_info['repo']

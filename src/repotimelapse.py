@@ -43,23 +43,8 @@ class RepositoryTimelapse:
         return csv_filename
 
     def generate_treemap(self, csv_filename):
-        df = pd.read_csv(csv_filename)
+        df_latest, path_columns = self.df_creator.treemap_dateframe(csv_filename)
         output_path = os.path.join(self.repo.output_dir, "file_structure_treemap.html")
-        
-        # データの前処理
-        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
-        df_latest = df.sort_values('date').groupby('File').last().reset_index()
-        
-        # ファイルパスの処理
-        path_parts = df_latest['File'].str.split('/', expand=True)
-        for i in range(len(path_parts.columns)):
-            df_latest[f'path_{i}'] = path_parts[i]
-             
-        df_latest['size'] = df_latest['Lines']
-        
-        # 動的にパスカラムのリストを作成
-        path_columns = [f'path_{i}' for i in range(len(path_parts.columns))]
-        
         self.video_generator.generate_treemap(df_latest, output_path, 'File Structure Treemap', path_columns)
         print(f"Treemap has been generated: {output_path}")
         webbrowser.open('file://' + os.path.realpath(output_path))

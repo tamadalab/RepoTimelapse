@@ -5,6 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 import plotly.io as pio
 import plotly.express as px
+import numpy as np
 
 class VideoGenerator:
     @staticmethod
@@ -98,7 +99,9 @@ class VideoGenerator:
             df,
             path=path_columns,
             values='Lines',
-            color='date',
+            color='changed_files',
+            color_continuous_scale='RdBu',
+            color_continuous_midpoint=np.average(df['changed_files']),
             hover_data=['date', 'Lines'],
             title=title
         )
