@@ -54,7 +54,6 @@ class DataFrameCreator:
         file_counts = df['File'].value_counts()
         df_latest['changed_files'] = df_latest['File'].map(file_counts)
         
-
         # ファイルパスの処理
         path_parts = df_latest['File'].str.split('/', expand=True)
         for i in range(len(path_parts.columns)):
