@@ -1,5 +1,3 @@
-import git
-
 class CommitAnalyzer:
     @staticmethod
     def analyze_commits(repo, commits, directory_path):
