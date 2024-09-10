@@ -3,20 +3,18 @@
 
 """"RepoTimelapse：GitHubのリポジトリURLからリポジトリの成長過程を動画化する。"""
 __author__ = 'Hayami Kento'
-__version__ = '0.1.0'
-__date__ = '2024/05/31 (created: 2024/05/31)'
+__version__ = '1.0.0'
+__date__ = '2024/09/10 (created: 2024/05/31)'
 
+from src.cli import CLI
 from src.repotimelapse import RepositoryTimelapse
 
 def main():
-    # repo_url = "https://github.com/tamadalab/MarryLab"
-    # repo_url = "https://github.com/SonarSource/sonarqube.git"
-    # repo_url = "https://github.com/stleary/JSON-java.git"
-    repo_url = input("Enter the URL of the repository you want to analyze: ")
-    file_extensions = ['.gradle', '.java', '.kt', '.xml']  # 分析対象のファイル拡張子
+    cli = CLI()
+    args = cli.parse_args()
 
-    processor = RepositoryTimelapse(repo_url)
-    processor.run_extended_analysis(repo_url, file_extensions)
+    processor = RepositoryTimelapse(args.repo_url)
+    processor.run_extended_analysis(args.extensions)
 
 if __name__ == "__main__":
     main()
