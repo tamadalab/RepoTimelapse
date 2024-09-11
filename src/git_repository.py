@@ -158,3 +158,38 @@ class GitRepository:
                 writer.writeheader()
             for row in results:
                 writer.writerow(row)
+
+    def get_repo_structure(self, commit):
+        structure = []
+        for item in commit.tree.traverse():
+            if item.type == 'blob':  # ファイル
+                structure.append({
+                    'path': item.path.split('/'),
+                    'size': item.size,
+                    'parent': '/'.join(item.path.split('/')[:-1]),
+                    'name': item.name,
+                    'file_change_count': self.get_file_change_count(item.path, commit.committed_date),
+                })
+        print(len(structure))
+        return structure
+    
+    def get_file_change_count(repo, file_path, until_date):
+        """指定された日付までのファイルの変更回数を取得"""
+        try:
+            return int(repo.git.rev_list('--count', 'HEAD', '--', file_path, before=until_date))
+        except:
+            return 0
+        
+    def get_sampled_commits(self, num_samples=20):
+        all_commits = list(self.repo.iter_commits())
+        first_commit_time = all_commits[-1].committed_datetime
+        last_commit_time = all_commits[0].committed_datetime
+        time_range = last_commit_time - first_commit_time
+        interval = time_range / (num_samples - 1)
+
+        sampled_commits = []
+        for i in range(num_samples):
+            target_time = first_commit_time + i * interval
+            closest_commit = min(all_commits, key=lambda x: abs(x.committed_datetime - target_time))
+            sampled_commits.append(closest_commit)
+        return sampled_commits
