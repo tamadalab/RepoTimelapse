@@ -72,8 +72,9 @@ class DataFrameCreator:
             raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
         
     @staticmethod
-    def structure_dataframe(structure, output_file, commit_date):
-        df = pd.DataFrame(structure)
-        print("success")
+    def structure_dataframe(structures):
+        flat_structures = [item for commit_structure in structures for item in commit_structure]
+        df = pd.DataFrame(flat_structures)
         return df
+        
 

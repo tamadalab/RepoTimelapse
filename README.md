@@ -1,5 +1,4 @@
 # RepoTimelapse
-# RepoTimelapse
 
 RepoTimelapseは、GitリポジトリのタイムラインをLOC（行数）の変化に基づいて視覚化するツールです。このREADMEでは、Dockerを使用してRepoTimelapseをセットアップし、実行する方法を説明します。
 

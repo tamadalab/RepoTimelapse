@@ -34,12 +34,16 @@ class RepositoryTimelapse:
         self.generate_extend_treemap()
 
     def generate_extend_treemap(self):
-        # commits = self.repo.get_sampled_commits(20)
-        commit = self.repo.repo.head.commit
-        structure = self.repo.get_repo_structure(commit)
-        csv_filename = os.path.join(self.repo.output_dir, self.generate_csv_filename(commit))
-        df = self.df_creator.structure_dataframe(structure, csv_filename, commit.committed_datetime)
-        df.to_csv(csv_filename)
+        commits = self.repo.get_sampled_commits(20)
+        structures = []
+        for commit in commits:
+            structure = self.repo.get_repo_structure(commit)
+            structures.append(structure)
+        df = self.df_creator.structure_dataframe(structures)
+        df.to_csv(os.path.join(self.repo.output_dir, "repo_structure.csv"))
+        output_path = os.path.join(self.repo.output_dir, "repo_structure_treemap.html")
+        self.video_generator.generate_extend_treemap(df, output_path)
+        
 
     def generate_csv_filename(self, commit):
         # コミットのタイムスタンプを使用して一意のファイル名を生成

@@ -14,7 +14,7 @@ def main():
     args = cli.parse_args()
 
     processor = RepositoryTimelapse(args.repo_url)
-    processor.run_extended_analysis(args.extensions)
-
+    # processor.run_extended_analysis(args.extensions)
+    processor.run_treemap_generate()
 if __name__ == "__main__":
     main()

@@ -164,13 +164,20 @@ class GitRepository:
         for item in commit.tree.traverse():
             if item.type == 'blob':  # ファイル
                 structure.append({
-                    'path': item.path.split('/'),
+                    'date': commit.committed_datetime.isoformat(),
                     'size': item.size,
                     'parent': '/'.join(item.path.split('/')[:-1]),
                     'name': item.name,
-                    'file_change_count': self.get_file_change_count(item.path, commit.committed_date),
+                    'file_change_count': self.get_file_change_count(item.path, commit.committed_datetime.isoformat()),
                 })
-        print(len(structure))
+            elif item.type == 'tree':
+                structure.append({
+                    'date': commit.committed_datetime.isoformat(),
+                    'size': 0,
+                    'parent': '/'.join(item.path.split('/')[:-1]),
+                    'name': item.name,
+                    'file_change_count': 0,
+                })
         return structure
     
     def get_file_change_count(repo, file_path, until_date):
@@ -181,15 +188,9 @@ class GitRepository:
             return 0
         
     def get_sampled_commits(self, num_samples=20):
-        all_commits = list(self.repo.iter_commits())
-        first_commit_time = all_commits[-1].committed_datetime
-        last_commit_time = all_commits[0].committed_datetime
-        time_range = last_commit_time - first_commit_time
-        interval = time_range / (num_samples - 1)
-
-        sampled_commits = []
-        for i in range(num_samples):
-            target_time = first_commit_time + i * interval
-            closest_commit = min(all_commits, key=lambda x: abs(x.committed_datetime - target_time))
-            sampled_commits.append(closest_commit)
+        head_branch = self.repo.head.reference
+        all_commits = list(self.repo.iter_commits(head_branch))
+        total_commits = len(all_commits)
+        interval = total_commits // num_samples
+        sampled_commits = all_commits[::interval]
         return sampled_commits
