@@ -109,3 +109,54 @@ class VideoGenerator:
         # Save the figure as an HTML file
         pio.write_html(fig, file=output_path)
         print(f"Treemap has been saved to {output_path}")
+
+    @staticmethod
+    def generate_extend_treemap(df, output_path):
+        commit0 = df['Commit'].iloc[0]
+        commits = df['Commit'].unique()
+
+        frame0 = None
+        frames = []
+        treemap = go.Treemap(
+            labels=df['name'],
+            values=df['size'],
+            parents=df['parent'],
+            texttemplate='%{label} <br> %{value} tonnes <br> %{percentRoot}'
+        )
+        if frame0 is None:
+            frame0 = treemap
+            frames.append(go.Frame(data=treemap))
+        
+        sliders = [
+            dict(
+                steps=[
+                    dict(
+                        method="animate",
+                        args=[
+                            [f"frame{i}"],# ここでフレームを指定, 例: frame1, frame2, frame3
+                            dict(mode="e", frame=dict(redraw=True, transition=dict(duration=200))),
+                        ],
+                        label=f"frame{i}"
+                    )
+                    for commit in commits
+                ],
+                transition=dict(
+                    font=dict(size=12), prefix="Commit", visible=True, xanchor="center"
+                ),
+                len=1.0,
+                active=1,
+            )
+        ]
+
+        layout = {
+
+        }
+
+        figure = go.Figure(
+            data=frame0,
+            layout=layout,
+            frames=frames
+        )
+        
+        figure.show()
+
