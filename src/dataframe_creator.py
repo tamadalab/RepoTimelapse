@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -70,11 +71,10 @@ class DataFrameCreator:
             return df.resample('Y').last().ffill()
         else:
             raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
-        
+    
     @staticmethod
-    def structure_dataframe(structures):
-        flat_structures = [item for commit_structure in structures for item in commit_structure]
-        df = pd.DataFrame(flat_structures)
-        return df
+    def create_dataframe(repo_structure, owner='root'):
+        df = pd.DataFrame(repo_structure)
+        # Create id and parent columns for Treemap
         
-
+        return df

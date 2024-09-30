@@ -13,40 +13,27 @@ class RepositoryTimelapse:
         self.df_creator = DataFrameCreator()
         self.video_generator = VideoGenerator()
 
-    def generate_commit_history_csv(self, file_extensions=None, batch_size=100, start_commit=None):
-        csv_filename = os.path.join(self.repo.output_dir, "commit_history.csv")
-        self.repo.process_commits(csv_filename, file_extensions, batch_size, start_commit)
-        print(f"Commit history CSV has been generated: {csv_filename}")
-        return csv_filename
+    def run(self):
+        self.generate_treemap()
+        self.generate_bar_chart()
 
-    def generate_treemap(self, csv_filename):
-        df_latest, path_columns = self.df_creator.treemap_dateframe(csv_filename)
-        output_path = os.path.join(self.repo.output_dir, "file_structure_treemap.html")
-        self.video_generator.generate_treemap(df_latest, output_path, 'File Structure Treemap', path_columns)
-        print(f"Treemap has been generated: {output_path}")
-        webbrowser.open('file://' + os.path.realpath(output_path))
+    def generate_treemap(self):
+        repo_structure = self.repo.get_repo_structure(sample_interval='YE')
+        treemap_df = DataFrameCreator.create_dataframe(repo_structure)
+        treemap_df.to_csv(os.path.join(self.generate_output_dir(), "treemap_data.csv"), index=False)
+        self.video_generator.generate_extend_treemap(treemap_df, os.path.join(self.generate_output_dir(), 'treemap.html'))
 
-    def run_extended_analysis(self, file_extensions=None):
-        csv_filename = self.generate_commit_history_csv(file_extensions)
-        self.generate_treemap(csv_filename)
-
-    def run_treemap_generate(self):
-        self.generate_extend_treemap()
-
-    def generate_extend_treemap(self):
-        commits = self.repo.get_sampled_commits(20)
-        structures = []
-        for commit in commits:
-            structure = self.repo.get_repo_structure(commit)
-            structures.append(structure)
-        df = self.df_creator.structure_dataframe(structures)
-        df.to_csv(os.path.join(self.repo.output_dir, "repo_structure.csv"))
-        output_path = os.path.join(self.repo.output_dir, "repo_structure_treemap.html")
-        self.video_generator.generate_extend_treemap(df, output_path)
-        
+    def generate_output_dir(self):
+        output_dir = os.path.join("out", self.repo.owner, self.repo.repo_name)
+        os.makedirs(output_dir, exist_ok=True)
+        return output_dir
 
     def generate_csv_filename(self, commit):
         # コミットのタイムスタンプを使用して一意のファイル名を生成
         timestamp = commit.committed_datetime.strftime("%Y%m%d_%H%M%S")
         return f"repo_structure_{timestamp}.csv"
     
+    def generate_bar_chart(self):
+        repo_structure = self.repo.get_current_stucture()
+        df = DataFrameCreator.create_dataframe(repo_structure)
+        df.to_csv(os.path.join(self.generate_output_dir(), "current_structure.csv"), index=False)

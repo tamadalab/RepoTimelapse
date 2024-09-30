@@ -11,6 +11,7 @@ class CLI:
                                  help='File extensions to analyze (e.g., .java .kt .xml)')
         self.parser.add_argument('--output', type=str, default='out', help='Output directory for results')
 
+
     def parse_args(self):
         args = self.parser.parse_args()
         if not args.repo_url:
