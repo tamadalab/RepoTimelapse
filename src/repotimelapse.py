@@ -35,5 +35,7 @@ class RepositoryTimelapse:
     
     def generate_bar_chart(self):
         repo_structure = self.repo.get_current_stucture()
-        df = DataFrameCreator.create_dataframe(repo_structure)
+        df = DataFrameCreator.barchart_dataframe(repo_structure)
         df.to_csv(os.path.join(self.generate_output_dir(), "current_structure.csv"), index=False)
+        output_path = os.path.join(self.generate_output_dir(), 'bar_chart.html')
+        self.video_generator.bar_chart(df, output_path)

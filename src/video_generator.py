@@ -214,3 +214,8 @@ class VideoGenerator:
         pio.write_html(figure, file=output_path)
 
         figure.show()
+
+    @staticmethod
+    def bar_chart(df, output_path):
+        fig = px.bar(df, x=df['extension'], y=df['size'], log_y=True, title='File Extensions')
+        pio.write_html(fig, file=output_path)

@@ -1,20 +1,18 @@
 import re
-from collections import deque
 import git
 import os
 import csv
-from datetime import datetime
 import time
-from multiprocessing import Pool, cpu_count
-from functools import partial
-
+from datetime import datetime, timezone
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 class GitRepository:
     def __init__(self, repo_url):
         self.repo_url = repo_url
         self.repo_info = self.parse_repo_url(repo_url)
         self.repo_path = self.get_repo_path()
-        self.output_dir = self.generate_output_dir()
         self.repo = None
         self.repo_name = self.repo_info['repo']
         self.owner = self.repo_info['owner']
@@ -35,7 +33,6 @@ class GitRepository:
         return os.path.join(os.getcwd(), self.repo_info['owner'], self.repo_info['repo'])
 
     def clone(self, remote_url):
-
         if not os.path.exists(self.repo_path):
             print(f"Cloning repository from {remote_url}...")
             self.repo = git.Repo.clone_from(remote_url, self.repo_path)
@@ -46,108 +43,9 @@ class GitRepository:
             self.repo.remotes.origin.pull()
             print("Repository updated successfully.")
 
-    def get_commit_history(self, directory_path):
-        if not self.repo:
-            self.repo = git.Repo(self.repo_path)
-        default_branch = self.repo.head.reference
-        return list(self.repo.iter_commits(default_branch, paths=directory_path))
-    
-    def generate_output_dir(self):
-        output_dir = os.path.join("out", self.repo_info['owner'], self.repo_info['repo'])
-        os.makedirs(output_dir, exist_ok=True)
-        return output_dir
-
-    def count_lines_in_file(self, commit_hexsha, file_path):
-        if not self.repo:
-            self.repo = git.Repo(self.repo_path)
-        try:
-            file_content = self.repo.git.show(f"{commit_hexsha}:{file_path}")
-            return len(file_content.splitlines())
-        except git.exc.GitCommandError:
-            return 0
-        
-    def get_directories(self):
-        if not self.repo:
-            self.repo = git.Repo(self.repo_path)
-    
-        tree = self.repo.head.commit.tree
-        directories = []
-        queue = deque([(tree, '')])
-    
-        while queue:
-            current_tree, prefix = queue.popleft()
-            for item in current_tree:
-                if item.type == 'tree':
-                    full_path = prefix + item.path
-                    directories.append(full_path)
-                    queue.append((item, full_path + '/'))
-    
-        return directories
-    
-    def get_repo_name(self):
-        return self.repo_name
-    
-    def count_lines(self, blob):
-        try:
-            content = blob.data_stream.read().decode('utf-8', errors='replace')
-            return len(content.splitlines())
-        except Exception as e:
-            print(f"Error processing {blob.name}: {e}")
-            return 0
-
-    def process_commit(self, file_extensions, commit_sha):
-        commit = self.repo.commit(commit_sha)
-        commit_date = commit.committed_datetime
-        commit_info = {
-            'Commit': commit.hexsha,
-            'Date_Unix': int(commit_date.timestamp()),
-            'Date_ISO': commit_date.isoformat()
-        }
-        
-        results = []
-        for item in commit.tree.traverse():
-            if item.type == 'blob':
-                if file_extensions is None or any(item.name.endswith(ext) for ext in file_extensions):
-                    line_count = self.count_lines(item)
-                    row = {**commit_info, 'File': item.path, 'Lines': line_count}
-                    results.append(row)
-        return results
-
-    def process_commits(self, csv_filename, file_extensions=None, batch_size=100, start_commit=None):
-        commits = list(self.repo.iter_commits(self.repo.active_branch.name))
-        total_commits = len(commits)
-
-        if start_commit:
-            start_index = next((i for i, c in enumerate(commits) if c.hexsha == start_commit), 0)
-            commits = commits[start_index:]
-
-        start_time = time.time()
-        processed_commits = 0
-
-        num_processes = cpu_count()
-        pool = Pool(processes=num_processes)
-        process_commit_partial = partial(self.process_commit, file_extensions)
-
-        for i in range(0, len(commits), batch_size):
-            batch_commits = commits[i:i+batch_size]
-            results = pool.map(process_commit_partial, [commit.hexsha for commit in batch_commits])
-            
-            flattened_results = [item for sublist in results for item in sublist]
-            
-            self.write_results(csv_filename, flattened_results)
-            
-            processed_commits += len(batch_commits)
-            elapsed_time = time.time() - start_time
-            commits_per_second = processed_commits / elapsed_time
-            estimated_time = (total_commits - processed_commits) / commits_per_second
-            
-            print(f"Processed {processed_commits}/{total_commits} commits. "
-                  f"Estimated time remaining: {estimated_time:.2f} seconds")
-
-        pool.close()
-        pool.join()
-
-        print(f"Total commits processed: {processed_commits}")
+    def process_commit(self, commit):
+            commit_date = time.strftime("%a, %d %b %Y %H:%M", time.gmtime(commit.committed_date))
+            return self.traverse_tree(commit.tree, commit_date, commit)
 
     def write_results(self, csv_filename, results):
         fieldnames = ['Commit', 'Date_Unix', 'Date_ISO', 'File', 'Lines']
@@ -159,38 +57,74 @@ class GitRepository:
             for row in results:
                 writer.writerow(row)
 
-    def get_repo_structure(self, commit):
-        structure = []
-        for item in commit.tree.traverse():
-            if item.type == 'blob':  # ファイル
-                structure.append({
-                    'date': commit.committed_datetime.isoformat(),
-                    'size': item.size,
-                    'parent': '/'.join(item.path.split('/')[:-1]),
-                    'name': item.name,
-                    'file_change_count': self.get_file_change_count(item.path, commit.committed_datetime.isoformat()),
-                })
-            elif item.type == 'tree':
-                structure.append({
-                    'date': commit.committed_datetime.isoformat(),
-                    'size': 0,
-                    'parent': '/'.join(item.path.split('/')[:-1]),
-                    'name': item.name,
-                    'file_change_count': 0,
-                })
-        return structure
-    
-    def get_file_change_count(repo, file_path, until_date):
-        """指定された日付までのファイルの変更回数を取得"""
-        try:
-            return int(repo.git.rev_list('--count', 'HEAD', '--', file_path, before=until_date))
-        except:
-            return 0
+    def get_repo_structure(self, sample_interval='1M', end_date=None, max_workers=1):
+        sampled_commits = self.get_sampled_commits(sample_interval, end_date)
+        all_data = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_commit = {executor.submit(self.process_commit, commit): commit for commit in sampled_commits}
         
-    def get_sampled_commits(self, num_samples=20):
-        head_branch = self.repo.head.reference
-        all_commits = list(self.repo.iter_commits(head_branch))
-        total_commits = len(all_commits)
-        interval = total_commits // num_samples
-        sampled_commits = all_commits[::interval]
-        return sampled_commits
+            for future in tqdm(as_completed(future_to_commit), total=len(sampled_commits), desc="Processing commits"):
+                try:
+                    commit_data = future.result()
+                    all_data.extend(commit_data)
+                except Exception as e:
+                    print(f"Error processing commit: {str(e)}")
+
+        return all_data
+    
+    def get_current_stucture(self):
+        commit = self.repo.head.commit
+        return self.traverse_tree(commit.tree, commit.committed_date, commit)
+        
+        
+    def get_sampled_commits(self, interval='M', end_date=None):
+        if end_date is None:
+            end_date = datetime.now(timezone.utc)
+        else:
+            end_date = pd.to_datetime(end_date).tz_localize(timezone.utc)
+
+        # 全コミットを取得
+        all_commits = list(self.repo.iter_commits('master'))
+        
+        # コミットをDataFrameに変換
+        commit_df = pd.DataFrame({
+            'commit': all_commits,
+            'date': [pd.to_datetime(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(c.committed_date)), utc=True) for c in all_commits]
+        })
+        
+        # 日付でソートし、指定された間隔でリサンプリング
+        commit_df = commit_df.sort_values('date').set_index('date')
+        sampled = commit_df.resample(interval).first()
+        
+        # end_dateより新しいコミットを除外
+        sampled = sampled[sampled.index <= end_date]
+        
+        return sampled['commit'].dropna().tolist()
+    
+    def traverse_tree(self, tree, commit_date, commit_hash, path=''):
+        items = []
+        for item in tree.traverse():
+            if item.type == 'blob':  # File
+                items.append({
+                    'path': item.path,
+                    'name': item.name,
+                    'type': 'file',
+                    'size': item.size,
+                    'extension': os.path.splitext(item.path)[1],
+                    'date': commit_date,
+                    'commit_hash': commit_hash,
+                    'parent': item.path.split('/')[-2] if '/' in item.path else 'root'
+                })
+            elif item.type == 'tree':  # Directory
+                items.append({
+                    'path': item.path,
+                    'name': item.name,
+                    'type': 'directory',
+                    'size': 0,
+                    'extension': '',
+                    'date': commit_date,
+                    'commit_hash': commit_hash,
+                    'parent': item.path.split('/')[-2] if '/' in item.path else 'root'
+                })
+                items.extend(self.traverse_tree(item, commit_date, commit_hash, path=item.path))
+        return items

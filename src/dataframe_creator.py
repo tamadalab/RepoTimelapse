@@ -75,6 +75,12 @@ class DataFrameCreator:
     @staticmethod
     def create_dataframe(repo_structure, owner='root'):
         df = pd.DataFrame(repo_structure)
-        # Create id and parent columns for Treemap
-        
         return df
+    
+    @staticmethod
+    def barchart_dataframe(repo_structure):
+        df = pd.DataFrame(repo_structure)
+        new_df = df.groupby('extension')['size'].sum().reset_index()
+        new_df = new_df[new_df['extension'].str.strip() != '']
+        new_df = new_df.sort_values('size', ascending=False)
+        return new_df
