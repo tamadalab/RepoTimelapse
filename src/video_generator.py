@@ -10,96 +10,6 @@ import numpy as np
 
 class VideoGenerator:
     @staticmethod
-    def generate_video(df, output_path, title):
-        bcr.bar_chart_race(
-            df=df,
-            filename=output_path,
-            title=title,
-            steps_per_period=10,
-            period_length=500,
-            figsize=(12, 8),
-        )
-
-    @staticmethod
-    def generate_plotly_animation(df, output_path, title, **kwargs):
-        """
-        Plotlyを使用してアニメーションを生成し、HTMLファイルとして保存します。
-
-        :param df: 入力DataFrame
-        :param output_path: 出力HTMLファイルのパス
-        :param title: アニメーションのタイトル
-        :param kwargs: Plotlyの追加パラメータ
-        """
-        frames = []
-        for i in tqdm(range(len(df)), desc="フレーム生成中"):
-            frame_data = df.iloc[: i + 1].iloc[-1].sort_values(ascending=True)
-            frames.append(
-                go.Frame(
-                    data=[
-                        go.Bar(
-                            x=frame_data.values,
-                            y=frame_data.index,
-                            orientation="h",
-                            text=frame_data.values,
-                            textposition="outside",
-                        )
-                    ],
-                    layout=go.Layout(
-                        title=f"{title}<br>{df.index[i]}",
-                        xaxis=dict(range=[0, df.max().max() * 1.1]),
-                        yaxis=dict(categoryorder="total ascending"),
-                    ),
-                )
-            )
-
-        fig = go.Figure(
-            data=[frames[0].data[0]],
-            layout=go.Layout(
-                title=title,
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        buttons=[
-                            dict(
-                                label="再生",
-                                method="animate",
-                                args=[
-                                    None,
-                                    {
-                                        "frame": {"duration": 100, "redraw": True},
-                                        "fromcurrent": True,
-                                        "transition": {"duration": 0},
-                                    },
-                                ],
-                            )
-                        ],
-                    )
-                ],
-                xaxis=dict(range=[0, df.max().max() * 1.1]),
-                yaxis=dict(categoryorder="total ascending"),
-            ),
-            frames=frames,
-        )
-
-        fig.update_layout(height=600, width=1000, **kwargs)
-
-        pio.write_html(fig, file=output_path, auto_play=False)
-        print(f"アニメーションが {output_path} に保存されました")
-
-    @staticmethod
-    def generate_both(df, bar_chart_race_output, plotly_output, title):
-        """
-        bar_chart_raceとPlotly両方を使用してアニメーションを生成します。
-
-        :param df: 入力DataFrame
-        :param bar_chart_race_output: bar_chart_raceの出力ファイルパス
-        :param plotly_output: Plotlyの出力HTMLファイルパス
-        :param title: アニメーションのタイトル
-        """
-        VideoGenerator.generate_video(df, bar_chart_race_output, title)
-        VideoGenerator.generate_plotly_animation(df, plotly_output, title)
-
-    @staticmethod
     def generate_treemap(df, output_path, title, path_columns):
         """
         Generates a treemap visualization using Plotly and saves it as an HTML file.
@@ -125,20 +35,27 @@ class VideoGenerator:
         print(f"Treemap has been saved to {output_path}")
 
     @staticmethod
+    def create_path_columns(df):
+        path_parts = df["path"].str.split("/", expand=True)
+        for i in range(len(path_parts.columns)):
+            df[f"path{i}"] = path_parts[i]
+
+        # 動的にパスカラムのリストを作成
+        return [f"path{i}" for i in range(len(path_parts.columns))]
+
+    @staticmethod
     def generate_extend_treemap(df, output_path):
         commit0 = df["commit_hash"].iloc[0]
         commits = df["commit_hash"].unique()
 
-        #Make a list of frame
+        # Make a list of frame
         frame0 = None
         frames = []
         for commit in commits:
-            df_tmp = (
-                df[df["commit_hash"] == commit]
-            )   
+            df_tmp = df[df["commit_hash"] == commit]
             treemap = go.Treemap(
                 ids=df_tmp["path"],
-                labels=df_tmp["name"], 
+                labels=df_tmp["name"],
                 values=df_tmp["size"],
                 parents=df_tmp["parent"],
                 branchvalues="total",
@@ -149,9 +66,8 @@ class VideoGenerator:
             )
             if frame0 is None:
                 frame0 = treemap
-            frames.append(go.Frame(name=f"frame-{commit}", data=treemap
-            ))
-        #Make sliders
+            frames.append(go.Frame(name=f"frame-{commit}", data=treemap))
+        # Make sliders
         sliders = [
             dict(
                 steps=[
@@ -160,7 +76,9 @@ class VideoGenerator:
                         args=[
                             [f"frame-{commit}"],
                             dict(
-                                mode="e", frame=dict(redraw=True), transition=dict(duration=200)
+                                mode="e",
+                                frame=dict(redraw=True),
+                                transition=dict(duration=200),
                             ),
                         ],
                         label=f"{commit}",
@@ -171,13 +89,16 @@ class VideoGenerator:
                 x=0,
                 y=0,
                 currentvalue=dict(
-                    font=dict(size=12), prefix="Commit: ", visible=True, xanchor="center"
+                    font=dict(size=12),
+                    prefix="Commit: ",
+                    visible=True,
+                    xanchor="center",
                 ),
                 len=1.0,
                 active=1,
-            )  
+            )
         ]
-        #create the layout object with slider parameters
+        # create the layout object with slider parameters
         layout = {
             "title": f"Treemap of {commit0}",
             "xaxis": {"visible": True, "showline": True},
@@ -204,18 +125,45 @@ class VideoGenerator:
             ],
             "sliders": sliders,
         }
-        #Create the final figure with layout and frame parameters
-        figure = go.Figure(
-            data=frame0,
-            layout=layout,
-            frames=frames
-        )
-        #Save the figure as an HTML file
+        # Create the final figure with layout and frame parameters
+        figure = go.Figure(data=frame0, layout=layout, frames=frames)
+        # Save the figure as an HTML file
         pio.write_html(figure, file=output_path)
 
         figure.show()
 
     @staticmethod
     def bar_chart(df, output_path):
-        fig = px.bar(df, x=df['extension'], y=df['size'], log_y=True, title='File Extensions')
+        fig = px.bar(
+            df, x=df["extension"], y=df["size"], log_y=True, title="File Extensions"
+        )
+        fig.update_layout(
+        xaxis=dict(
+            tickangle=-45,  # x軸ラベルを45度回転
+            tickmode='array',
+            tickvals=list(range(len(df['extension']))),
+            ticktext=df['extension'].tolist()
+        ),
+        bargap=0.2,  # 棒グラフ間のギャップを調整
+        height=600,  # グラフの高さを調整
+        margin=dict(b=100)  # 下部のマージンを増やしてラベルの表示を確保
+)
+
+
+        pio.write_image(fig, file="out/stleary/JSON-java/bar_chart.pdf")
+        pio.write_html(fig, file=output_path)
+
+    @staticmethod
+    def pie_chart(df, output_path):
+        fig = px.pie(df, values="size", names="extension", title="File Extensions")
+        pio.write_html(fig, file=output_path)
+
+    @staticmethod
+    def total_line_count(df, output_path):
+        fig = px.line(df, x=df['date'], y=df['total_lines'], title="Total Line Count")
+        pio.write_html(fig, file=output_path)
+
+    @staticmethod
+    def file_count(df, output_path):
+        fig = px.line(df, x=df['date'], y=df['files'], title="File Count")
         pio.write_html(fig, file=output_path)

@@ -73,14 +73,32 @@ class DataFrameCreator:
             raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
     
     @staticmethod
-    def create_dataframe(repo_structure, owner='root'):
+    def create_dataframe(repo_structure, owner):
         df = pd.DataFrame(repo_structure)
         return df
     
     @staticmethod
-    def barchart_dataframe(repo_structure):
+    def extension_dataframe(repo_structure):
         df = pd.DataFrame(repo_structure)
         new_df = df.groupby('extension')['size'].sum().reset_index()
         new_df = new_df[new_df['extension'].str.strip() != '']
         new_df = new_df.sort_values('size', ascending=False)
         return new_df
+    
+    @staticmethod
+    def file_count_dataframe(repo_structure):
+        df = pd.DataFrame(repo_structure)
+        df['date'] = pd.to_datetime(df['date'])
+        df_sorted = df.sort_values('date')
+        df_sorted = df_sorted.reset_index(drop=True)
+        return df_sorted
+    
+    @staticmethod
+    def total_line_count_dataframe(repo_structure):
+        df = pd.DataFrame(repo_structure)
+        df['date'] = pd.to_datetime(df['date'])
+        df_sorted = df.sort_values('date')
+        df_sorted = df_sorted.reset_index(drop=True)
+        df_sorted['total_lines'] = (df_sorted['insertions'] - df_sorted['deletions']).cumsum()
+        return df_sorted
+    
