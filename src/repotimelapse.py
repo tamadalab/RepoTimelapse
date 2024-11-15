@@ -27,6 +27,14 @@ class RepositoryTimelapse:
         print(f"Treemap has been generated: {output_path}")
         webbrowser.open('file://' + os.path.realpath(output_path))
 
+    def generate_treemap_video(self, csv_filename):
+        df_latest, path_columns = self.df_creator.treemap_dateframe(csv_filename)
+        period_dfs = self.df_creator.create_cumulative_time_series_df(df_latest)
+        output_path = os.path.join(self.repo.output_dir, "file_structure_treemap_animation.html")
+
+        self.video_generator.generate_animated_treemap(period_dfs, path_columns, output_path, 'File Structure Treemap Animation')
+
     def run_extended_analysis(self, file_extensions=None):
         csv_filename = self.generate_commit_history_csv(file_extensions)
-        self.generate_treemap(csv_filename)
+        # self.generate_treemap(csv_filename)
+        self.generate_treemap_video(csv_filename)

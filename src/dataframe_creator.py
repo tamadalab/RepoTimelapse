@@ -92,3 +92,89 @@ class DataFrameCreator:
             return df.resample('Y').last().ffill()
         else:
             raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
+        
+    @staticmethod
+    def create_time_series_df(df, period='Y'):
+         # dateでソート
+        df = df.sort_values('date')
+        
+        # 期間の開始時点を取得
+        period_starts = pd.date_range(
+            start=df['date'].min(),
+            end=df['date'].max(),
+            freq=period
+        )
+        
+        # 各期間の累積DataFrameを作成
+        cumulative_dfs = {}
+        
+        for period_end in period_starts:
+            # その期間までの全データを取得
+            period_mask = df['date'] <= period_end
+            period_df = df[period_mask].copy()
+            
+            if not period_df.empty:
+                # 各ファイルの最新状態を取得
+                latest_state = period_df.groupby('File').last().reset_index()
+                
+                # Lines > 0 のファイルのみを保持（削除されたファイルを除外）
+                latest_state = latest_state[latest_state['Lines'] > 0]
+                
+                if not latest_state.empty:
+                    # changed_files を再計算
+                    # その期間までの各ファイルの変更回数
+                    file_changes = period_df['File'].value_counts()
+                    latest_state['changed_files'] = latest_state['File'].map(file_changes)
+                    
+                    cumulative_dfs[period_end] = latest_state
+        
+        return cumulative_dfs
+    
+    @staticmethod
+    def create_cumulative_time_series_df(df, period='Y'):
+        """
+        時系列データを指定した期間で区切り、累積的なDataFrameを作成します
+        
+        :param df: 元のDataFrame (date, File, Lines, changed_filesカラムを含む)
+        :param period: 期間('Y', 'M', 'W', 'D'のいずれか)
+        :return: 期間ごとの累積DataFrameのディクショナリ
+        """
+        print(f"Processing data from {df['date'].min()} to {df['date'].max()}")
+        
+        # dateでソート
+        df = df.sort_values('date')
+        
+        # 期間の開始時点を取得
+        period_starts = pd.date_range(
+            start=df['date'].min(),
+            end=df['date'].max(),
+            freq=period
+        )
+        print(f"Found {len(period_starts)} periods")
+        
+        # 各期間の累積DataFrameを作成
+        cumulative_dfs = {}
+        
+        for period_end in period_starts:
+            # その期間までの全データを取得
+            period_mask = df['date'] <= period_end
+            period_df = df[period_mask].copy()
+            
+            if not period_df.empty:
+                # 各ファイルの最新状態を取得
+                latest_state = period_df.groupby('File').last().reset_index()
+                latest_state = latest_state[latest_state['Lines'] > 0]
+                
+                if not latest_state.empty:
+                    # changed_files を再計算
+                    file_changes = period_df['File'].value_counts()
+                    latest_state['changed_files'] = latest_state['File'].map(file_changes)
+                    
+                    # ファイルパスを分解してpath_partsカラムを追加
+                    latest_state['path_parts'] = latest_state['File'].apply(lambda x: x.split('/'))
+
+                    print(f"Period {period_end}: {len(latest_state)} files")
+                    cumulative_dfs[period_end] = latest_state
+
+                    print(latest_state)
+        return cumulative_dfs
