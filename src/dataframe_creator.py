@@ -45,28 +45,6 @@ class DataFrameCreator:
         return pd.DataFrame(data).T.fillna(0)
     
     @staticmethod
-    def treemap_dateframe(csv_filename):
-        df = pd.read_csv(csv_filename)
-        
-        # データの前処理
-        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
-        df_latest = df.sort_values('date').groupby('File').last().reset_index()
-        file_counts = df['File'].value_counts()
-        df_latest['changed_files'] = df_latest['File'].map(file_counts)
-        
-        # ファイルパスの処理
-        path_parts = df_latest['File'].str.split('/', expand=True)
-        for i in range(len(path_parts.columns)):
-            df_latest[f'path_{i}'] = path_parts[i]
-             
-        df_latest['size'] = df_latest['Lines']
-        
-        # 動的にパスカラムのリストを作成
-        path_columns = [f'path_{i}' for i in range(len(path_parts.columns))]
-
-        return df_latest, path_columns
-    
-    @staticmethod
     def process_dataframe(df):
         df.columns = [os.path.basename(col) for col in df.columns]
         return df
@@ -94,8 +72,44 @@ class DataFrameCreator:
             raise ValueError("Invalid period. Use 'D' for daily or 'W' for weekly.")
         
     @staticmethod
+    def treemap_dateframe(csv_filename):
+        # 全てのカラムを読み込む
+        df = pd.read_csv(csv_filename)
+        
+        # データの前処理
+        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
+        
+        # 変更タイプに基づいて処理
+        # 削除されたファイルは Lines=0 として扱う
+        # リネームされたファイルは新しいパスで処理
+        
+        # 最新の状態を取得（削除されたファイルは除外）
+        df_latest = df.sort_values('date').groupby('File').last().reset_index()
+        df_latest = df_latest[df_latest['Lines'] > 0]  # 削除されたファイルを除外
+        
+        # ファイルごとの変更回数をカウント（リネームも含める）
+        file_changes = pd.concat([
+            df['File'],
+            df[df['Change'] == 'renamed']['OldPath']  # リネーム前のパスも含める
+        ]).value_counts()
+        
+        df_latest['changed_files'] = df_latest['File'].map(file_changes)
+        
+        # ファイルパスの処理
+        path_parts = df_latest['File'].str.split('/', expand=True)
+        for i in range(len(path_parts.columns)):
+            df_latest[f'path_{i}'] = path_parts[i]
+        
+        df_latest['size'] = df_latest['Lines']
+        
+        # 動的にパスカラムのリストを作成
+        path_columns = [f'path_{i}' for i in range(len(path_parts.columns))]
+        
+        return df_latest, path_columns
+
+    @staticmethod
     def create_time_series_df(df, period='Y'):
-         # dateでソート
+        # dateでソート
         df = df.sort_values('date')
         
         # 期間の開始時点を取得
@@ -114,18 +128,21 @@ class DataFrameCreator:
             period_df = df[period_mask].copy()
             
             if not period_df.empty:
-                # 各ファイルの最新状態を取得
+                # 各ファイルの最新状態を取得（削除されたファイルは除外）
                 latest_state = period_df.groupby('File').last().reset_index()
-                
-                # Lines > 0 のファイルのみを保持（削除されたファイルを除外）
                 latest_state = latest_state[latest_state['Lines'] > 0]
                 
                 if not latest_state.empty:
-                    # changed_files を再計算
-                    # その期間までの各ファイルの変更回数
-                    file_changes = period_df['File'].value_counts()
-                    latest_state['changed_files'] = latest_state['File'].map(file_changes)
+                    # リネームされたファイルの履歴も含めて変更回数を計算
+                    file_changes = pd.concat([
+                        period_df['File'],
+                        period_df[period_df['Change'] == 'renamed']['OldPath']
+                    ]).value_counts()
                     
+                    latest_state['changed_files'] = latest_state['File'].map(file_changes)
+                    latest_state['path_parts'] = latest_state['File'].apply(lambda x: x.split('/'))
+                    
+                    print(f"Period {period_end}: {len(latest_state)} files")
                     cumulative_dfs[period_end] = latest_state
         
         return cumulative_dfs
@@ -177,4 +194,5 @@ class DataFrameCreator:
                     cumulative_dfs[period_end] = latest_state
 
                     print(latest_state)
+                    
         return cumulative_dfs

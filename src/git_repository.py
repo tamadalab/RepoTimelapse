@@ -98,6 +98,8 @@ class GitRepository:
     def process_commit(self, file_extensions, commit_sha):
         commit = self.repo.commit(commit_sha)
         commit_date = commit.committed_datetime
+        
+        # コミット情報の基本データを作成
         commit_info = {
             'Commit': commit.hexsha,
             'Date_Unix': int(commit_date.timestamp()),
@@ -105,15 +107,137 @@ class GitRepository:
         }
         
         results = []
-        for item in commit.tree.traverse():
-            if item.type == 'blob':
-                if file_extensions is None or any(item.name.endswith(ext) for ext in file_extensions):
-                    line_count = self.count_lines(item)
-                    row = {**commit_info, 'File': item.path, 'Lines': line_count}
+        paths_to_process = set()  # 処理対象のパスを保持
+        
+        def collect_directory_paths(path):
+            """パスのすべての親ディレクトリを収集"""
+            parts = path.split('/')
+            current_path = ''
+            dirs = set()
+            for part in parts[:-1]:  # 最後のパート（ファイル名）を除く
+                current_path = f"{current_path}{part}/" if current_path else f"{part}/"
+                dirs.add(current_path.rstrip('/'))
+            return dirs
+
+        # 初回コミットの場合
+        if not commit.parents:
+            for item in commit.tree.traverse():
+                if item.type == 'blob':
+                    if file_extensions is None or any(item.name.endswith(ext) for ext in file_extensions):
+                        line_count = self.count_lines(item)
+                        paths_to_process.add(item.path)
+                        row = {**commit_info, 
+                            'File': item.path, 
+                            'Lines': line_count, 
+                            'Change': 'added', 
+                            'Type': 'file'}
+                        results.append(row)
+            
+            # ディレクトリ情報の収集
+            all_dirs = set()
+            for path in paths_to_process:
+                all_dirs.update(collect_directory_paths(path))
+            
+            # ディレクトリエントリの追加
+            for dir_path in all_dirs:
+                row = {**commit_info,
+                    'File': dir_path,
+                    'Lines': 0,
+                    'Change': 'added',
+                    'Type': 'directory'}
+                results.append(row)
+                
+            return results
+        
+        # 差分の処理
+        parent = commit.parents[0]
+        diffs = parent.diff(commit)
+        
+        # 変更されたファイルを処理
+        for diff in diffs:
+            file_path = diff.b_path if diff.b_path else diff.a_path
+            
+            # 拡張子フィルタリング
+            if file_extensions and not any(file_path.endswith(ext) for ext in file_extensions):
+                continue
+                
+            paths_to_process.add(file_path)
+            
+            if diff.change_type == 'A':  # Added
+                if diff.b_blob:
+                    line_count = self.count_lines(diff.b_blob)
+                    row = {**commit_info, 
+                        'File': file_path, 
+                        'Lines': line_count, 
+                        'Change': 'added',
+                        'Type': 'file'}
                     results.append(row)
+                    
+            elif diff.change_type == 'M':  # Modified
+                if diff.b_blob:
+                    line_count = self.count_lines(diff.b_blob)
+                    row = {**commit_info, 
+                        'File': file_path, 
+                        'Lines': line_count, 
+                        'Change': 'modified',
+                        'Type': 'file'}
+                    results.append(row)
+                    
+            elif diff.change_type == 'D':  # Deleted
+                row = {**commit_info, 
+                    'File': file_path, 
+                    'Lines': 0, 
+                    'Change': 'deleted',
+                    'Type': 'file'}
+                results.append(row)
+                
+            elif diff.change_type == 'R':  # Renamed
+                if diff.b_blob:
+                    line_count = self.count_lines(diff.b_blob)
+                    row = {**commit_info, 
+                        'File': diff.b_path, 
+                        'Lines': line_count, 
+                        'Change': 'renamed', 
+                        'OldPath': diff.a_path,
+                        'Type': 'file'}
+                    results.append(row)
+        
+        # コミット時点でのディレクトリ構造を取得
+        all_dirs = set()
+        for path in paths_to_process:
+            all_dirs.update(collect_directory_paths(path))
+        
+        # 現在のツリーから存在するディレクトリを確認
+        for dir_path in all_dirs:
+            try:
+                # ディレクトリの存在確認
+                commit.tree[dir_path]
+                row = {**commit_info,
+                    'File': dir_path,
+                    'Lines': 0,
+                    'Change': 'unchanged',
+                    'Type': 'directory'}
+                results.append(row)
+            except KeyError:
+                # このディレクトリは削除された可能性がある
+                pass
+        
         return results
 
     def process_commits(self, csv_filename, file_extensions=None, batch_size=100, start_commit=None):
+        # フィールド名の定義を一箇所に集中化
+        self.fieldnames = ['Commit', 'Date_Unix', 'Date_ISO', 'File', 'Lines', 'Change', 'OldPath', 'Type']
+
+        # 既存のファイルを削除
+        if os.path.exists(csv_filename):
+            os.remove(csv_filename)
+            print(f"Removed existing CSV file: {csv_filename}")
+
+        # ヘッダーの書き込み
+        with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+            writer.writeheader()
+
         commits = list(self.repo.iter_commits(self.repo.active_branch.name))
         total_commits = len(commits)
 
@@ -142,7 +266,7 @@ class GitRepository:
             estimated_time = (total_commits - processed_commits) / commits_per_second
             
             print(f"Processed {processed_commits}/{total_commits} commits. "
-                  f"Estimated time remaining: {estimated_time:.2f} seconds")
+                f"Estimated time remaining: {estimated_time:.2f} seconds")
 
         pool.close()
         pool.join()
@@ -150,11 +274,19 @@ class GitRepository:
         print(f"Total commits processed: {processed_commits}")
 
     def write_results(self, csv_filename, results):
-        fieldnames = ['Commit', 'Date_Unix', 'Date_ISO', 'File', 'Lines']
-        mode = 'a' if os.path.exists(csv_filename) else 'w'
-        with open(csv_filename, mode, newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            if mode == 'w':
-                writer.writeheader()
+        # クラスのフィールド名を使用
+        with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
             for row in results:
-                writer.writerow(row)
+                # 必要なフィールドがない場合のデフォルト値を設定
+                row_with_defaults = {
+                    'Commit': row.get('Commit', ''),
+                    'Date_Unix': row.get('Date_Unix', 0),
+                    'Date_ISO': row.get('Date_ISO', ''),
+                    'File': row.get('File', ''),
+                    'Lines': row.get('Lines', 0),
+                    'Change': row.get('Change', 'unchanged'),
+                    'OldPath': row.get('OldPath', ''),
+                    'Type': row.get('Type', 'file')
+                }
+                writer.writerow(row_with_defaults)
