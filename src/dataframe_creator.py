@@ -193,6 +193,5 @@ class DataFrameCreator:
                     print(f"Period {period_end}: {len(latest_state)} files")
                     cumulative_dfs[period_end] = latest_state
 
-                    print(latest_state)
-                    
+
         return cumulative_dfs

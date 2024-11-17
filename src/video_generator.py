@@ -116,168 +116,207 @@ class VideoGenerator:
         TreeMap用にデータを準備します
         
         :param df: 入力DataFrame
-        :return: TreeMap用に処理されたDataFrame
+        :return: ids, parents, values, labels, customdataのタプル
         """
         # 全てのパスの部分を収集
-        all_paths = []
+        nodes = []
+        root_added = False
+        
         for _, row in df.iterrows():
-            path_parts = row['path_parts']
+            path_parts = row['File'].split('/')
             current_path = ''
-            for part in path_parts:
-                parent_path = current_path
-                current_path = f"{current_path}/{part}".lstrip('/')
-                all_paths.append({
-                    'id': current_path,
-                    'parent': parent_path or '/',
-                    'name': part,
-                    'Lines': row['Lines'] if current_path == row['File'] else 0,
-                    'changed_files': row['changed_files'] if current_path == row['File'] else 0,
-                    'is_file': current_path == row['File']
+            
+            # ルートノードの追加（一度だけ）
+            if not root_added:
+                nodes.append({
+                    'id': 'root',
+                    'parent': '',
+                    'name': 'root',
+                    'full_path': '',
+                    'lines': 0,
+                    'changes': 0,
+                    'type': 'directory'
                 })
+                root_added = True
+            
+            # パスの各部分をノードとして追加
+            for i, part in enumerate(path_parts):
+                parent_path = current_path if current_path else 'root'
+                current_path = f"{current_path}/{part}".lstrip('/')
+                
+                # 最後の部分（ファイル自体）かどうかを判断
+                is_file = (i == len(path_parts) - 1 and row['Type'] == 'file')
+                
+                node = {
+                    'id': current_path,
+                    'parent': parent_path,
+                    'name': part,
+                    'full_path': current_path,
+                    'lines': row['Lines'] if is_file else 0,
+                    'changes': row['changed_files'] if is_file else 0,
+                    'type': 'file' if is_file else 'directory'
+                }
+                nodes.append(node)
         
-        # 重複を除去（同じパスが複数回出現する可能性があるため）
-        unique_paths = []
-        seen_ids = set()
-        for path in all_paths:
-            if path['id'] not in seen_ids:
-                unique_paths.append(path)
-                seen_ids.add(path['id'])
+        # ノードの重複を除去（同じIDのノードは最新のものを保持）
+        unique_nodes = {}
+        for node in nodes:
+            unique_nodes[node['id']] = node
         
-        return pd.DataFrame(unique_paths)
-    
+        # データの準備
+        ids = [node['id'] for node in unique_nodes.values()]
+        parents = [node['parent'] for node in unique_nodes.values()]
+        values = [node['lines'] for node in unique_nodes.values()]
+        labels = [node['name'] for node in unique_nodes.values()]
+        customdata = np.array([
+            [node['full_path'], node['lines'], node['changes'], node['type']]
+            for node in unique_nodes.values()
+        ])
+        
+        return ids, parents, values, labels, customdata
+
     @staticmethod
-    def generate_animated_treemap(period_dfs, path_columns, output_path, title):
+    def generate_animated_treemap(period_dfs, output_path, title):
         """
         時系列のTreeMapアニメーションを生成します
-        """
         
-        # 全期間を通じての最大変更回数を取得
+        :param period_dfs: 期間ごとのDataFrameを含む辞書
+        :param output_path: 出力するHTMLファイルのパス
+        :param title: グラフのタイトル
+        """
+        frames = []
         max_changes = max(
-            df['changed_files'].max() for df in period_dfs.values()
+            df['changed_files'].max() 
+            for df in period_dfs.values() 
+            if not df.empty and 'changed_files' in df.columns
         )
         
-        # フレームを作成
-        frames = []
-        for date, period_df in period_dfs.items():
-            # TreeMap用にデータを準備
-            treemap_df = VideoGenerator.prepare_treemap_data(period_df)
-            
-            frame = go.Frame(
-                data=[go.Treemap(
-                    ids=treemap_df['id'],
-                    parents=treemap_df['parent'],
-                    values=treemap_df['Lines'],
-                    branchvalues='total',
-                    text=treemap_df['name'],
-                    customdata=np.column_stack((
-                        treemap_df['Lines'],
-                        treemap_df['changed_files'],
-                        treemap_df['is_file']
-                    )),
-                    hovertemplate='<b>Path:</b> %{id}<br>' +
-                                '<b>Lines:</b> %{customdata[0]}<br>' +
-                                '<b>Changes:</b> %{customdata[1]}<br>' +
-                                '<extra></extra>',
-                    marker=dict(
-                        colors=treemap_df['changed_files'],
-                        colorscale='RdBu',
-                        cmid=max_changes / 2,
-                        cmin=0,
-                        cmax=max_changes,
-                        showscale=True
-                    ),
-                    textinfo='label'
-                )],
-                name=date.strftime('%Y-%m-%d')
-            )
-            frames.append(frame)
-
-        # 初期フレームのデータを使用
-        initial_df = VideoGenerator.prepare_treemap_data(next(iter(period_dfs.values())))
-
-        # 図の作成
+        # 初期フレームのデータを取得
+        first_df = next(iter(period_dfs.values()))
+        ids, parents, values, labels, customdata = VideoGenerator.prepare_treemap_data(first_df)
+        
+        # 基本のTreemapを作成
         fig = go.Figure(
             data=[go.Treemap(
-                ids=initial_df['id'],
-                parents=initial_df['parent'],
-                values=initial_df['Lines'],
-                branchvalues='total',
-                text=initial_df['name'],
-                customdata=np.column_stack((
-                    initial_df['Lines'],
-                    initial_df['changed_files'],
-                    initial_df['is_file']
-                )),
-                hovertemplate='<b>Path:</b> %{id}<br>' +
-                            '<b>Lines:</b> %{customdata[0]}<br>' +
-                            '<b>Changes:</b> %{customdata[1]}<br>' +
-                            '<extra></extra>',
+                ids=ids,
+                parents=parents,
+                values=values,
+                labels=labels,
+                customdata=customdata,
+                hovertemplate="""
+                    <b>Path:</b> %{customdata[0]}<br>
+                    <b>Lines:</b> %{customdata[1]}<br>
+                    <b>Changes:</b> %{customdata[2]}<br>
+                    <b>Type:</b> %{customdata[3]}
+                    <extra></extra>
+                """,
+                textinfo="label",
                 marker=dict(
-                    colors=initial_df['changed_files'],
-                    colorscale='RdBu',
-                    cmid=max_changes / 2,
-                    cmin=0,
-                    cmax=max_changes,
-                    showscale=True
+                    colors=customdata[:, 2],  # changes as color
+                    colorscale='blues',
+                    cmid=max_changes/2,
+                    showscale=True,
+                    colorbar=dict(
+                        title="Number of Changes"
+                    )
                 ),
-                textinfo='label'
-            )],
-            frames=frames,
-            layout=go.Layout(
-                title=dict(
-                    text=f"{title}<br><sub>色は変更頻度を表します</sub>",
-                    x=0.5,
-                    xanchor='center'
-                ),
-                width=1200,
-                height=800,
-                updatemenus=[{
-                    'type': 'buttons',
-                    'showactive': False,
-                    'x': 0.1,
-                    'y': 1.1,
-                    'buttons': [
-                        {
-                            'label': '再生',
-                            'method': 'animate',
-                            'args': [None, {
-                                'frame': {'duration': 1000, 'redraw': True},
-                                'fromcurrent': True,
-                                'transition': {'duration': 500}
-                            }]
-                        },
-                        {
-                            'label': '一時停止',
-                            'method': 'animate',
-                            'args': [[None], {
-                                'frame': {'duration': 0, 'redraw': False},
-                                'mode': 'immediate',
-                                'transition': {'duration': 0}
-                            }]
-                        }
-                    ]
-                }],
-                sliders=[{
-                    'currentvalue': {
-                        'prefix': '期間: ',
-                        'xanchor': 'right'
-                    },
-                    'pad': {'t': 50},
-                    'steps': [
-                        {
-                            'label': frame.name,
-                            'method': 'animate',
-                            'args': [[frame.name], {
-                                'frame': {'duration': 1000, 'redraw': True},
-                                'transition': {'duration': 500}
-                            }]
-                        }
-                        for frame in frames
-                    ]
-                }]
-            )
+            )]
+        )
+        
+        # フレームの生成
+        for date, df in tqdm(period_dfs.items(), desc="Generating frames"):
+            if not df.empty:
+                ids, parents, values, labels, customdata = VideoGenerator.prepare_treemap_data(df)
+                
+                frame = go.Frame(
+                    data=[go.Treemap(
+                        ids=ids,
+                        parents=parents,
+                        values=values,
+                        labels=labels,
+                        customdata=customdata,
+                        hovertemplate="""
+                            <b>Path:</b> %{customdata[0]}<br>
+                            <b>Lines:</b> %{customdata[1]}<br>
+                            <b>Changes:</b> %{customdata[2]}<br>
+                            <b>Type:</b> %{customdata[3]}
+                            <extra></extra>
+                        """,
+                        textinfo="label",
+                        marker=dict(
+                            colors=customdata[:, 2],
+                            colorscale='blues',
+                            cmid=max_changes/2
+                        )
+                    )],
+                    name=date.strftime('%Y-%m-%d')
+                )
+                frames.append(frame)
+        
+        # アニメーションの設定
+        fig.frames = frames
+        
+        # レイアウトの設定
+        fig.update_layout(
+            title=dict(
+                text=f"{title}<br><sup>Color indicates number of changes</sup>",
+                x=0.5,
+                xanchor='center'
+            ),
+            width=1200,
+            height=800,
+            updatemenus=[{
+                'type': 'buttons',
+                'showactive': False,
+                'y': 1.2,
+                'x': 0.1,
+                'xanchor': 'right',
+                'yanchor': 'top',
+                'buttons': [
+                    dict(
+                        label='Play',
+                        method='animate',
+                        args=[None, {
+                            'frame': {'duration': 1000, 'redraw': True},
+                            'fromcurrent': True,
+                            'transition': {'duration': 500}
+                        }]
+                    ),
+                    dict(
+                        label='Pause',
+                        method='animate',
+                        args=[[None], {
+                            'frame': {'duration': 0, 'redraw': False},
+                            'mode': 'immediate',
+                            'transition': {'duration': 0}
+                        }]
+                    )
+                ]
+            }],
+            sliders=[{
+                'currentvalue': {
+                    'prefix': 'Date: ',
+                    'xanchor': 'right'
+                },
+                'pad': {'t': 50},
+                'len': 0.9,
+                'x': 0.1,
+                'y': 0,
+                'steps': [
+                    {
+                        'label': frame.name,
+                        'method': 'animate',
+                        'args': [[frame.name], {
+                            'frame': {'duration': 1000, 'redraw': True},
+                            'transition': {'duration': 500},
+                            'mode': 'immediate'
+                        }]
+                    }
+                    for frame in frames
+                ]
+            }]
         )
         
         # HTMLファイルとして保存
-        fig.write_html(output_path)
+        pio.write_html(fig, file=output_path)
         print(f"Animated treemap has been saved to {output_path}")
