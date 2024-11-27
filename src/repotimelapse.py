@@ -29,12 +29,23 @@ class RepositoryTimelapse:
 
     def generate_treemap_video(self, csv_filename):
         df_latest, path_columns = self.df_creator.treemap_dateframe(csv_filename)
-        period_dfs = self.df_creator.create_cumulative_time_series_df(df_latest)
+        period_dfs = self.df_creator.create_time_series_df(df_latest)
         output_path = os.path.join(self.repo.output_dir, "file_structure_treemap_animation.html")
 
-        self.video_generator.generate_animated_treemap(period_dfs, path_columns, output_path, 'File Structure Treemap Animation')
+        self.video_generator.generate_animated_treemap(
+            period_dfs, 
+            output_path=output_path,
+            title='File Structure Treemap Animation'
+        )
+
+    def generate_bar_chart(self, csv_filename):
+        df = self.df_creator.create_extension_df(csv_filename)
+        df.to_csv(os.path.join(self.repo.output_dir, "extension.csv"), index=False)
+        output_path = os.path.join(self.repo.output_dir, 'extension_bar.html')
+        self.video_generator.bar_chart(df, output_path)
 
     def run_extended_analysis(self, file_extensions=None):
         csv_filename = self.generate_commit_history_csv(file_extensions)
         # self.generate_treemap(csv_filename)
         self.generate_treemap_video(csv_filename)
+        self.generate_bar_chart(csv_filename)
