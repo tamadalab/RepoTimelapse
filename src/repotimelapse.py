@@ -38,7 +38,14 @@ class RepositoryTimelapse:
             title='File Structure Treemap Animation'
         )
 
+    def generate_bar_chart(self, csv_filename):
+        df = self.df_creator.create_extension_df(csv_filename)
+        df.to_csv(os.path.join(self.repo.output_dir, "extension.csv"), index=False)
+        output_path = os.path.join(self.repo.output_dir, 'extension_bar.html')
+        self.video_generator.bar_chart(df, output_path)
+
     def run_extended_analysis(self, file_extensions=None):
         csv_filename = self.generate_commit_history_csv(file_extensions)
         # self.generate_treemap(csv_filename)
         self.generate_treemap_video(csv_filename)
+        self.generate_bar_chart(csv_filename)

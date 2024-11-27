@@ -195,3 +195,37 @@ class DataFrameCreator:
 
 
         return cumulative_dfs
+    
+    @staticmethod
+    def create_extension_df(csv_filename):
+        # CSVファイルを読み込み
+        df = pd.read_csv(csv_filename)
+        
+        # 日付を変換
+        df['date'] = pd.to_datetime(df['Date_ISO'], utc=True)
+        
+        # 最新の状態のみを取得（各ファイルの最新バージョン）
+        latest_state = df.sort_values('date').groupby('File').last().reset_index()
+        
+        latest_state = latest_state[latest_state['Lines'] > 0]
+        
+        latest_state['extension'] = latest_state['File'].apply(
+            lambda x: os.path.splitext(x)[1].lower() or 'no_extension'
+        )
+        
+        # 拡張子ごとの合計行数を計算
+        extension_stats = latest_state.groupby('extension').agg({
+            'Lines': 'sum',
+            'File': 'count'
+        }).reset_index()
+        
+        # カラム名を変更
+        extension_stats = extension_stats.rename(columns={
+            'Lines': 'size',
+            'File': 'count'
+        })
+        
+        # サイズでソート（降順）
+        extension_stats = extension_stats.sort_values('size', ascending=False)
+
+        return extension_stats
